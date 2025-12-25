@@ -4,6 +4,7 @@ import { DynamicRoomBlueprint } from './components/DynamicRoomBlueprint';
 import { ScorecardMatrix } from './components/ScorecardMatrix';
 import { EditableText } from './components/EditableText';
 import { CostEstimator } from './components/CostEstimator';
+import { UnitMixModal } from './components/UnitMixModal';
 import { 
   Building2, 
   BedDouble, 
@@ -63,20 +64,22 @@ const StarSelector = () => {
   );
 };
 
-const UnitCountInput = () => {
-  const { unitCount, setUnitCount, language } = useStandards();
+const UnitMixTrigger = ({ onClick }: { onClick: () => void }) => {
+  const { totalUnits, language } = useStandards();
   
   return (
-    <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border border-gray-200">
-      <LayoutGrid className="w-4 h-4 text-gray-400" />
-      <span className="text-xs text-gray-500">{language === 'ar' ? 'عدد الوحدات:' : 'Units:'}</span>
-      <input 
-        type="number" 
-        value={unitCount}
-        onChange={(e) => setUnitCount(Math.max(1, parseInt(e.target.value) || 0))}
-        className="w-16 text-center font-bold text-shg-blue outline-none bg-transparent"
-      />
-    </div>
+    <button 
+      onClick={onClick}
+      className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 hover:border-shg-blue hover:text-shg-blue transition-colors group"
+    >
+      <LayoutGrid className="w-4 h-4 text-gray-400 group-hover:text-shg-blue" />
+      <span className="text-xs text-gray-500 group-hover:text-shg-blue transition-colors">
+        {language === 'ar' ? 'تكوين الوحدات:' : 'Config:'}
+      </span>
+      <span className="font-bold text-shg-blue">
+        {totalUnits} {language === 'ar' ? 'وحدة' : 'Units'}
+      </span>
+    </button>
   );
 };
 
@@ -197,12 +200,13 @@ const Layout = () => {
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showMixModal, setShowMixModal] = useState(false);
 
   const handleAdminClick = () => {
     if (isAdmin) {
-      toggleAdmin(); // Lock it
+      toggleAdmin();
     } else {
-      setShowAdminModal(true); // Ask for pin
+      setShowAdminModal(true);
     }
   };
 
@@ -252,7 +256,7 @@ const Layout = () => {
                   : 'Select your target rating to watch requirements dynamically adapt before your eyes.'}
               </p>
               <div className="mb-4">
-                <UnitCountInput />
+                <UnitMixTrigger onClick={() => setShowMixModal(true)} />
               </div>
               <button 
                 onClick={() => setActiveChapter('room')} 
@@ -326,7 +330,7 @@ const Layout = () => {
       }`}>
         <div className="p-6 border-b border-gray-100 flex flex-col items-center">
            <div className="flex gap-4 mb-4">
-             {/* Branding Logos (Text Placeholders for simplicity in code) */}
+             {/* Branding Logos */}
              <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-500">UKRA</div>
              <div className="w-12 h-12 bg-shg-gold rounded-full flex items-center justify-center text-[10px] font-bold text-white">Ownara</div>
            </div>
@@ -379,7 +383,7 @@ const Layout = () => {
                <span className="font-bold text-shg-blue">{rating} Stars</span>
              </div>
              <div className="h-4 w-px bg-gray-300"></div>
-             <UnitCountInput />
+             <UnitMixTrigger onClick={() => setShowMixModal(true)} />
           </div>
           <StarSelector />
         </header>
@@ -400,6 +404,7 @@ const Layout = () => {
       </main>
 
       {showAdminModal && <AdminModal onClose={() => setShowAdminModal(false)} />}
+      <UnitMixModal isOpen={showMixModal} onClose={() => setShowMixModal(false)} />
     </div>
   );
 };

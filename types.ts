@@ -13,6 +13,19 @@ export type Category =
   | 'recreation'
   | 'safety';
 
+// Precise logic for how many of an item are needed
+export type CalculationRule = 
+  | 'fixed'            // One time purchase (e.g., Signage)
+  | 'per_unit'         // Every room gets one (e.g., Door lock)
+  | 'per_guest_capacity' // Based on total sleeping capacity (e.g., Towels)
+  | 'per_single_bed'   // Only for Single/Twin rooms
+  | 'per_king_bed'     // Only for Double/Suite/VIP
+  | 'per_bedroom'      // Suites might have 2 bedrooms
+  | 'per_bathroom'     // Suites might have 2 bathrooms
+  | 'per_suite_vip'    // Luxury items only for Suites and VIP
+  | 'per_staff'        // For HR/Uniforms
+  | 'sqm_dependent';   // For flooring/curtains (simplified here)
+
 export interface StandardItem {
   id: string;
   category: Category;
@@ -20,19 +33,20 @@ export interface StandardItem {
   titleEn: string;
   descriptionAr: string;
   descriptionEn: string;
-  mandatoryFor: StarRating[]; // Which ratings is this mandatory for?
+  mandatoryFor: StarRating[]; 
   points: number;
   valueByStar: Record<StarRating, string | number | boolean>;
-  citation: string; // The item number in the PDF (e.g., "14", "107")
+  citation: string;
   
-  // Financial Estimation Data
-  hasCost?: boolean; // Does this item have a monetary cost attached?
-  baseCost?: number; // Estimated cost per unit in SAR (Base level)
-  costType?: 'per_room' | 'fixed' | 'per_staff' | 'per_guest'; // Logic for calculation
-  itemType?: 'ffe' | 'ose'; // FF&E (Furniture) or OS&E (Supplies/Spoons/Towels)
+  // Financial & BoQ Data
+  hasCost?: boolean;
+  baseCost?: number;
+  // logic: calculation rule overrides simple costType
+  calcRule?: CalculationRule; 
+  itemType?: 'ffe' | 'ose';
   
   // Material Specs per Star Rating
-  specsByStar?: Record<StarRating, { ar: string; en: string }>;
+  specsByStar?: Partial<Record<StarRating, { ar: string; en: string }>>;
 }
 
 export interface StandardsData {
@@ -47,12 +61,20 @@ export interface StandardsData {
   safety: StandardItem[];
 }
 
+export interface UnitMix {
+  single: number;  // 1 Bed
+  double: number;  // 1 King Bed
+  twin: number;    // 2 Single Beds
+  suite: number;   // 1 King + Living
+  vip: number;     // 1 King + Upgraded Amenities
+}
+
 export interface AppState {
   rating: StarRating;
   language: Language;
   isAdmin: boolean;
   activeChapter: string;
-  unitCount: number; // Number of apartments/rooms in the hotel
+  unitMix: UnitMix; // Replaces simple unitCount
 }
 
 export interface StandardsContextType extends AppState {
@@ -61,7 +83,9 @@ export interface StandardsContextType extends AppState {
   toggleAdmin: () => void;
   setAdminStatus: (status: boolean) => void;
   setActiveChapter: (chapter: string) => void;
-  setUnitCount: (count: number) => void;
+  setUnitMix: (mix: UnitMix) => void;
+  updateUnitMix: (key: keyof UnitMix, value: number) => void;
+  totalUnits: number; // Computed property
   data: StandardsData;
   updateDataItem: (category: keyof StandardsData, id: string, field: string, value: string) => void;
 }
