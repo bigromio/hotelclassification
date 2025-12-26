@@ -1,80 +1,54 @@
 import React, { useState } from 'react';
 import { useStandards } from '../context/StandardsContext';
 import { StandardsData, StandardItem, CalculationRule } from '../types';
-import { Calculator, ChevronDown, ChevronUp, Package, Box, AlertCircle } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronUp, Package, Box, Warehouse, LayoutTemplate, Coffee, Utensils, ChefHat, BedDouble, Bath } from 'lucide-react';
 
 export const CostEstimator = () => {
   const { data, rating, unitMix, totalUnits, language } = useStandards();
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Multiplier logic based on Star Rating
   const getQualityMultiplier = (r: number) => {
     switch (r) {
       case 1: return 1.0; 
-      case 2: return 1.2;
-      case 3: return 1.5;
-      case 4: return 2.5; 
-      case 5: return 4.0; // Significant jump for luxury
+      case 2: return 1.1;
+      case 3: return 1.3;
+      case 4: return 1.8; 
+      case 5: return 2.5;
       default: return 1.0;
     }
   };
 
   const multiplier = getQualityMultiplier(rating);
 
-  // --- CORE LOGIC: The Brain of the BoQ ---
   const calculateQuantity = (item: StandardItem): number => {
-    // 1. Check if item is excluded for this star rating (value is '0' or '-')
     const ruleValue = item.valueByStar[rating];
     if (typeof ruleValue === 'string' && (ruleValue === '0' || ruleValue === '-' || ruleValue === '')) {
       return 0;
     }
 
-    // 2. Determine base multiplier from the text (e.g., "2 sets" -> 2)
     let perItemBase = 1;
     if (typeof ruleValue === 'number') perItemBase = ruleValue;
     if (typeof ruleValue === 'string') {
         const match = ruleValue.match(/(\d+(\.\d+)?)/);
-        if (match) perItemBase = parseFloat(match[0]);
+        if (match) {
+          perItemBase = parseFloat(match[0]);
+        }
     }
 
-    // 3. Apply Calculation Rule
     const rule: CalculationRule = item.calcRule || 'per_unit';
 
     switch (rule) {
-      case 'fixed':
-        return perItemBase; // e.g., 1 Signage Package for the whole hotel
-
-      case 'per_unit':
-        return totalUnits * perItemBase; // e.g., Door locks
-
-      case 'per_single_bed':
-        // Needed for Single Rooms (1) and Twin Rooms (2)
-        return (unitMix.single + (unitMix.twin * 2)) * perItemBase;
-
-      case 'per_king_bed':
-        // Needed for Double, Suite, VIP
-        return (unitMix.double + unitMix.suite + unitMix.vip) * perItemBase;
-
-      case 'per_guest_capacity':
-        // Assume: Single(1), Double(2), Twin(2), Suite(2), VIP(2)
-        const totalCapacity = unitMix.single + (unitMix.double * 2) + (unitMix.twin * 2) + (unitMix.suite * 2) + (unitMix.vip * 2);
-        return totalCapacity * perItemBase;
-
-      case 'per_suite_vip':
-        return (unitMix.suite + unitMix.vip) * perItemBase;
-
-      case 'per_bathroom':
-        // Assume Suites have 1.5 or 2 baths? Lets assume 1 per unit for now, plus extra for suites if specified
-        // Simplified: 1 per unit
-        return totalUnits * perItemBase;
-
-      case 'per_staff':
-        // Rough estimate: 0.5 staff per room for 3 star, 1.5 for 5 star
-        const staffRatio = rating <= 3 ? 0.5 : 1.2;
-        return Math.ceil(totalUnits * staffRatio) * perItemBase;
-
-      default:
-        return totalUnits * perItemBase;
+      case 'fixed': return perItemBase; 
+      case 'per_unit': return totalUnits * perItemBase;
+      case 'per_standard_room': return (unitMix.single + unitMix.double + unitMix.twin) * perItemBase;
+      case 'per_single_bed': return (unitMix.single + (unitMix.twin * 2)) * perItemBase;
+      case 'per_king_bed': return (unitMix.double + unitMix.suite + unitMix.vip) * perItemBase;
+      case 'per_guest_capacity': return (unitMix.single + (unitMix.double * 2) + (unitMix.twin * 2) + (unitMix.suite * 2) + (unitMix.vip * 2)) * perItemBase;
+      case 'per_suite_vip': return (unitMix.suite + unitMix.vip) * perItemBase;
+      case 'per_bathroom': return (totalUnits + unitMix.vip) * perItemBase;
+      case 'per_staff': return Math.max(1, Math.ceil(totalUnits / 15)) * perItemBase;
+      default: return totalUnits * perItemBase;
     }
   };
 
@@ -83,33 +57,123 @@ export const CostEstimator = () => {
     return item.baseCost * multiplier * quantity;
   };
 
-  const categories: {key: keyof StandardsData, labelAr: string, labelEn: string}[] = [
-    { key: 'reception', labelAr: 'الاستقبال والبهو', labelEn: 'Reception & Lobby' },
-    { key: 'room', labelAr: 'تجهيزات الغرف (FF&E)', labelEn: 'Room FF&E' },
-    { key: 'kitchen', labelAr: 'تجهيزات المطابخ', labelEn: 'Kitchen Equipment' },
-    { key: 'bath', labelAr: 'الحمامات', labelEn: 'Bathrooms' },
-    { key: 'services', labelAr: 'التدبير الفندقي والخدمات', labelEn: 'Housekeeping & Services' },
-    { key: 'safety', labelAr: 'الأمن والسلامة', labelEn: 'Safety & Security' },
-    { key: 'building', labelAr: 'تجهيزات المبنى', labelEn: 'Building Specs' },
-    { key: 'food_beverage', labelAr: 'المطاعم', labelEn: 'F&B Outlets' },
-    { key: 'recreation', labelAr: 'الترفيه', labelEn: 'Recreation' },
+  // Define strictly separated sections
+  const sections = [
+    { 
+      id: 'central_kitchen', 
+      labelAr: 'المطبخ المركزي (معدات تجارية)', 
+      labelEn: 'Central Kitchen (Commercial)', 
+      sourceCat: 'kitchen', 
+      filterSub: 'central_kitchen',
+      icon: ChefHat,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50'
+    },
+    { 
+      id: 'restaurant', 
+      labelAr: 'المطعم الرئيسي (أثاث وتشغيل)', 
+      labelEn: 'Main Restaurant (FF&E)', 
+      sourceCat: 'food_beverage', 
+      filterSub: 'restaurant',
+      icon: Utensils,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50'
+    },
+    { 
+      id: 'coffee_shop', 
+      labelAr: 'الكوفي شوب (معدات وثلاجات)', 
+      labelEn: 'Coffee Shop Equipment', 
+      sourceCat: 'food_beverage', // Also check reception if needed
+      filterSub: 'coffee_shop',
+      icon: Coffee,
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50'
+    },
+    { 
+      id: 'room_service', 
+      labelAr: 'خدمة الغرف (عربات وصواني)', 
+      labelEn: 'Room Service', 
+      sourceCat: 'food_beverage', 
+      filterSub: 'room_service',
+      icon: LayoutTemplate,
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-50'
+    },
+    { 
+      id: 'unit_kitchen', 
+      labelAr: 'مطابخ الغرف والأجنحة', 
+      labelEn: 'In-Unit Kitchenettes', 
+      sourceCat: 'kitchen', 
+      filterSub: 'unit_kitchen',
+      icon: Box,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50'
+    },
+    { 
+      id: 'bedroom', 
+      labelAr: 'تجهيزات غرف النوم', 
+      labelEn: 'Bedroom FF&E', 
+      sourceCat: 'room', 
+      filterSub: 'bedroom', // We need to ensure room items have subCategory, or fallback
+      fallback: true, // Special flag to catch general room items
+      icon: BedDouble,
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50'
+    },
+    { 
+      id: 'bathroom', 
+      labelAr: 'الحمامات', 
+      labelEn: 'Bathrooms', 
+      sourceCat: 'bath', 
+      filterSub: 'unit_bath',
+      fallback: true,
+      icon: Bath,
+      color: 'text-teal-600',
+      bgColor: 'bg-teal-50'
+    },
+    // Add other generic sections
+    { id: 'reception', labelAr: 'الاستقبال', labelEn: 'Reception', sourceCat: 'reception', fallback: true, icon: Warehouse },
+    { id: 'recreation', labelAr: 'الترفيه', labelEn: 'Recreation', sourceCat: 'recreation', fallback: true, icon: Warehouse },
+    { id: 'services', labelAr: 'الخدمات', labelEn: 'Services', sourceCat: 'services', fallback: true, icon: Warehouse },
   ];
+
+  // Helper to fetch items based on section definition
+  const getItemsForSection = (section: any) => {
+    const sourceItems = data[section.sourceCat as keyof StandardsData] || [];
+    
+    if (section.filterSub) {
+      const filtered = sourceItems.filter(item => item.subCategory === section.filterSub);
+      // If fallback is true and filtered is empty, maybe return all? No, strictly follow filter if exists.
+      // But for 'bedroom', I updated data to have subCategory.
+      
+      // Special case: if I want to catch items that might have missed the tag but belong to category
+      if (filtered.length === 0 && section.fallback) {
+         // return sourceItems; // Use with caution
+         // Better: Filter items that DON'T have a specific conflicting subCategory
+         return sourceItems.filter(i => !['central_kitchen', 'unit_kitchen', 'restaurant', 'coffee_shop', 'room_service'].includes(i.subCategory || ''));
+      }
+      return filtered;
+    }
+    
+    // Default: return all in category
+    return sourceItems;
+  };
 
   // Calculate totals
   let grandTotal = 0;
-  const categoryTotals: Record<string, number> = {};
+  const sectionTotals: Record<string, number> = {};
 
-  categories.forEach(cat => {
-    const items = data[cat.key] || [];
-    let catSum = 0;
+  sections.forEach(sec => {
+    const items = getItemsForSection(sec);
+    let secSum = 0;
     items.forEach(item => {
       if (item.hasCost) {
         const qty = calculateQuantity(item);
-        catSum += calculateItemCost(item, qty);
+        secSum += calculateItemCost(item, qty);
       }
     });
-    categoryTotals[cat.key] = catSum;
-    grandTotal += catSum;
+    sectionTotals[sec.id] = secSum;
+    grandTotal += secSum;
   });
 
   const formatCurrency = (amount: number) => {
@@ -120,8 +184,8 @@ export const CostEstimator = () => {
     }).format(amount);
   };
 
-  const toggleCategory = (key: string) => {
-    setExpandedCategory(expandedCategory === key ? null : key);
+  const toggleSection = (id: string) => {
+    setExpandedSection(expandedSection === id ? null : id);
   };
 
   return (
@@ -131,12 +195,12 @@ export const CostEstimator = () => {
           <div>
             <h2 className="text-2xl font-bold text-shg-blue flex items-center gap-2">
               <Calculator className="w-6 h-6 text-shg-gold" />
-              {language === 'ar' ? 'جدول الكميات الذكي (Smart BoQ)' : 'Smart BoQ Engine'}
+              {language === 'ar' ? 'المقدر المالي التفصيلي' : 'Detailed Cost Estimator'}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {language === 'ar' 
-                ? 'يتم حساب الكميات بناءً على مزيج الغرف (مفرد، مزدوج، أجنحة) ومعايير التصنيف.' 
-                : 'Quantities calculated based on Unit Mix (Single, Double, Suites) and Classification Standards.'}
+                ? 'تم فصل الأصول المركزية (المطابخ والمطاعم) عن أصول الوحدات السكنية بدقة.' 
+                : 'Strict separation between Central Assets (Kitchens, Restaurants) and Unit Assets.'}
             </p>
           </div>
           <div className="flex gap-2 text-sm bg-gray-100 p-2 rounded-lg">
@@ -144,13 +208,9 @@ export const CostEstimator = () => {
                 <span className="block text-xs text-gray-500">{language === 'ar' ? 'إجمالي الغرف' : 'Total Units'}</span>
                 <span className="font-bold">{totalUnits}</span>
              </div>
-             <div className="px-2 border-r border-gray-300">
-                <span className="block text-xs text-gray-500">{language === 'ar' ? 'الأسرة المفردة' : 'Single Beds'}</span>
-                <span className="font-bold">{unitMix.single + (unitMix.twin * 2)}</span>
-             </div>
              <div className="px-2">
-                <span className="block text-xs text-gray-500">{language === 'ar' ? 'الأسرة المزدوجة' : 'King Beds'}</span>
-                <span className="font-bold">{unitMix.double + unitMix.suite + unitMix.vip}</span>
+                <span className="block text-xs text-gray-500">{language === 'ar' ? 'الأجنحة' : 'Suites'}</span>
+                <span className="font-bold">{unitMix.suite + unitMix.vip}</span>
              </div>
           </div>
         </div>
@@ -165,52 +225,57 @@ export const CostEstimator = () => {
              <div className="text-xs text-gray-500 uppercase font-bold mb-1">{language === 'ar' ? 'متوسط تكلفة الغرفة' : 'Avg Cost Per Key'}</div>
              <div className="text-xl font-bold text-gray-800">{formatCurrency(totalUnits > 0 ? grandTotal / totalUnits : 0)}</div>
           </div>
-           {/* FF&E vs OS&E summary could go here */}
         </div>
 
         {/* Detailed List */}
         <div className="space-y-4">
-          {categories.map((cat) => {
-            const catItems = (data[cat.key] || []).filter(i => i.hasCost);
-            const total = categoryTotals[cat.key];
+          {sections.map((sec) => {
+            const secItems = getItemsForSection(sec).filter(i => i.hasCost);
+            const total = sectionTotals[sec.id];
             
-            if (catItems.length === 0) return null;
+            if (secItems.length === 0) return null;
             
-            const isExpanded = expandedCategory === cat.key;
+            const isExpanded = expandedSection === sec.id;
+            const Icon = sec.icon || Package;
 
             return (
-              <div key={cat.key} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300">
+              <div key={sec.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300">
                 <button 
-                  onClick={() => toggleCategory(cat.key)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleSection(sec.id)}
+                  className={`w-full flex items-center justify-between p-4 transition-colors ${sec.bgColor || 'bg-gray-50'} hover:opacity-90`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full transition-colors ${isExpanded ? 'bg-shg-blue text-white' : 'bg-gray-200 text-gray-500'}`}>
-                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    <div className={`p-2 rounded-full bg-white shadow-sm ${sec.color || 'text-gray-600'}`}>
+                      {<Icon size={20} />}
                     </div>
                     <span className="font-bold text-gray-800 text-lg">
-                      {language === 'ar' ? cat.labelAr : cat.labelEn}
+                      {language === 'ar' ? sec.labelAr : sec.labelEn}
                     </span>
                   </div>
-                  <div className="font-bold text-green-700">
-                    {formatCurrency(total)}
+                  <div className="flex items-center gap-4">
+                     <div className="font-bold text-gray-700">
+                        {formatCurrency(total)}
+                     </div>
+                     <div className={`text-gray-400 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                       <ChevronDown size={20} />
+                     </div>
                   </div>
                 </button>
                 
                 {isExpanded && (
-                  <div className="p-4 overflow-x-auto">
+                  <div className="p-4 overflow-x-auto bg-white border-t border-gray-100">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-gray-500 border-b bg-gray-50">
                           <th className="text-right p-3 font-medium w-1/3">{language === 'ar' ? 'البند والمواصفات' : 'Item & Specs'}</th>
-                          <th className="text-center p-3 font-medium">{language === 'ar' ? 'قاعدة الحساب' : 'Logic'}</th>
+                          <th className="text-center p-3 font-medium">{language === 'ar' ? 'نوع الأصل' : 'Asset Type'}</th>
                           <th className="text-center p-3 font-bold text-shg-blue">{language === 'ar' ? 'الكمية' : 'Qty'}</th>
                           <th className="text-right p-3 font-medium">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
                           <th className="text-right p-3 font-medium">{language === 'ar' ? 'الإجمالي' : 'Total'}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {catItems.map((item) => {
+                        {secItems.map((item) => {
                           const spec = item.specsByStar ? item.specsByStar[rating] : null;
                           const specText = spec ? (language === 'ar' ? spec.ar : spec.en) : '-';
                           const totalQty = calculateQuantity(item);
@@ -221,15 +286,18 @@ export const CostEstimator = () => {
 
                           // Translate Rule
                           let ruleLabel = item.calcRule;
+                          let isCentral = item.calcRule === 'fixed';
+                          
                           if (language === 'ar') {
                             const map: Record<string, string> = {
-                              'fixed': 'ثابت',
+                              'fixed': 'أصل مركزي ثابت',
                               'per_unit': 'لكل وحدة',
-                              'per_single_bed': 'لكل سرير مفرد',
-                              'per_king_bed': 'لكل سرير مزدوج',
+                              'per_standard_room': 'غرف قياسية',
+                              'per_single_bed': 'لكل سرير',
+                              'per_king_bed': 'لكل سرير',
                               'per_guest_capacity': 'لكل ضيف',
                               'per_suite_vip': 'أجنحة فقط',
-                              'per_staff': 'لكل موظف',
+                              'per_staff': 'تشغيلي',
                               'per_bathroom': 'لكل حمام'
                             };
                             ruleLabel = map[item.calcRule || 'per_unit'] || item.calcRule;
@@ -244,8 +312,11 @@ export const CostEstimator = () => {
                                 </div>
                                 <div className="text-xs text-gray-500 mt-1">{specText}</div>
                               </td>
-                              <td className="p-3 text-center text-xs text-gray-400">
-                                <span className="bg-gray-100 px-2 py-1 rounded">{ruleLabel}</span>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-1 rounded text-xs flex items-center justify-center gap-1 mx-auto w-fit ${isCentral ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {isCentral ? <Warehouse size={12} /> : <LayoutTemplate size={12} />}
+                                  {ruleLabel}
+                                </span>
                               </td>
                               <td className="p-3 text-center font-bold text-shg-blue text-base">
                                 {totalQty.toLocaleString()}
